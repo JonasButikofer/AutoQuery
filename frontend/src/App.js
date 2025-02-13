@@ -234,71 +234,68 @@ function App() {
       ) : (
         <div className="main-content">
           <div className="selection-container">
-            <div className="left-section">
-              <h2>Select Database</h2>
-              <select
-                onChange={(e) => fetchTables(e.target.value)}
-                value={selectedDatabase}
-              >
-                <option value="">Select a Database</option>
-                {databases.map((db, index) => (
-                  <option key={index} value={db}>
-                    {db}
-                  </option>
-                ))}
-              </select>
+          <div className="left-section">
+  <h2>Select Database</h2>
+  <select onChange={(e) => fetchTables(e.target.value)} value={selectedDatabase}>
+    <option value="">Select a Database</option>
+    {databases.map((db, index) => (
+      <option key={index} value={db}>
+        {db}
+      </option>
+    ))}
+  </select>
 
-              {selectedDatabase && (
-                <div>
-                  <h2>Select Table</h2>
-                  <select
-                    onChange={(e) => fetchColumns(e.target.value)}
-                    value={selectedTable}
-                  >
-                    <option value="">Select a Table</option>
-                    {tables.map((table, index) => (
-                      <option key={index} value={table}>
-                        {table}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+  {selectedDatabase && (
+    <div>
+      <h2>Select Table</h2>
+      <select onChange={(e) => fetchColumns(e.target.value)} value={selectedTable}>
+        <option value="">Select a Table</option>
+        {tables.map((table, index) => (
+          <option key={index} value={table}>
+            {table}
+          </option>
+        ))}
+      </select>
+    </div>
+  )}
 
-              {selectedTable && columns.length > 0 && (
-                <div>
-                  <h2>Select Columns</h2>
-                  {columns.map((column, index) => (
-                    <div key={index}>
-                      <input
-                        type="checkbox"
-                        checked={selectedColumns.includes(column)}
-                        onChange={(e) => handleColumnChange(e, column)}
-                      />
-                      <label>{column}</label>
-                    </div>
-                  ))}
+  {selectedTable && columns.length > 0 && (
+    <div>
+      <h2>Select Columns</h2>
+      {columns.map((column, index) => (
+        <div key={index}>
+          <input
+            type="checkbox"
+            checked={selectedColumns.includes(column)}
+            onChange={(e) => handleColumnChange(e, column)}
+          />
+          <label>{column}</label>
+        </div>
+      ))}
 
-                  {/* Display join table columns */}
-                  {joins.map((join, joinIndex) =>
-                    join.joinColumns.map((column, colIndex) => (
-                      <div key={`join-${joinIndex}-${colIndex}`}>
-                        <input
-                          type="checkbox"
-                          checked={selectedColumns.includes(`${join.joinTable}.${column}`)}
-                          onChange={(e) =>
-                            handleColumnChange(e, `${join.joinTable}.${column}`)
-                          }
-                        />
-                        <label>
-                          {join.joinTable}.{column}
-                        </label>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
+      {/* Display join table columns */}
+      {joins.map((join, joinIndex) =>
+        join.joinColumns.map((column, colIndex) => (
+          <div key={`join-${joinIndex}-${colIndex}`}>
+            <input
+              type="checkbox"
+              checked={selectedColumns.includes(`${join.joinTable}.${column}`)}
+              onChange={(e) => handleColumnChange(e, `${join.joinTable}.${column}`)}
+            />
+            <label>{join.joinTable}.{column}</label>
+          </div>
+        ))
+      )}
+    </div>
+  )}
+
+  {/* Move Fetch Data button here */}
+  {selectedColumns.length > 0 && (
+    <button className="fetch-button" onClick={fetchData}>
+      Fetch Data
+    </button>
+  )}
+</div>
 
             {/* Right section now contains filters and joins and is scrollable */}
             <div className="right-section" style={{ overflowY: 'auto', maxHeight: '80vh' }}>
@@ -395,7 +392,7 @@ function App() {
                 ))}
               </div>
 
-              <button onClick={fetchData}>Fetch Data</button>
+              {/* <button onClick={fetchData}>Fetch Data</button> */}
             </div>
           </div>
 
