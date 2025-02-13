@@ -1,24 +1,27 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import './App.css'; // Import your CSS file for styling
+import './App.css';
+import AdvancedFilters from './advancedFilters';
 
 function App() {
-  // States for login and connection
+  // Connection/Login States
   const [host, setHost] = useState('');
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [error, setError] = useState('');
 
-  // States for databases, tables, and columns
+  // Database/Table/Column States
   const [databases, setDatabases] = useState([]);
   const [tables, setTables] = useState([]);
   const [columns, setColumns] = useState([]);
   const [selectedDatabase, setSelectedDatabase] = useState('');
   const [selectedTable, setSelectedTable] = useState('');
   const [selectedColumns, setSelectedColumns] = useState([]);
-  const [joins, setJoins] = useState([]); // For join functionality
   const [data, setData] = useState([]);
+
+  // Advanced filters state
+  const [advancedFilters, setAdvancedFilters] = useState({});
 
   // Handle login and fetch databases
   const handleLogin = () => {
@@ -31,7 +34,7 @@ function App() {
     }
   };
 
-  // Fetch databases from the backend
+  // Fetch list of databases from backend
   const fetchDatabases = async () => {
     try {
       const response = await axios.post('http://localhost:5000/api/databases', {
@@ -39,26 +42,20 @@ function App() {
         user,
         password
       });
-      console.log('Databases fetched:', response.data);
       setDatabases(response.data.databases);
     } catch (err) {
-      if (err.response) {
-        setError(`API Error: ${err.response.data.error}`);
-        console.error('Error fetching databases:', err.response.data);
-      } else {
-        setError('Server is not responding. Please try again later.');
-      }
+      setError('Error fetching databases');
     }
   };
 
-  // Fetch tables of the selected database
+  // Fetch tables for the selected database
   const fetchTables = async (database) => {
     setSelectedDatabase(database);
     setSelectedTable('');
     setColumns([]);
     setSelectedColumns([]);
     setData([]);
-    setJoins([]);
+    setAdvancedFilters({});
     try {
       const response = await axios.post('http://localhost:5000/api/tables', {
         host,
@@ -66,15 +63,9 @@ function App() {
         password,
         database
       });
-      console.log('Tables fetched:', response.data);
       setTables(response.data);
     } catch (err) {
-      if (err.response) {
-        setError(`API Error: ${err.response.data.error}`);
-        console.error('Error fetching tables:', err.response.data);
-      } else {
-        setError('Server is not responding. Please try again later.');
-      }
+      setError('Error fetching tables');
     }
   };
 
@@ -84,7 +75,7 @@ function App() {
     setColumns([]);
     setSelectedColumns([]);
     setData([]);
-    setJoins([]);
+    setAdvancedFilters({});
     try {
       const response = await axios.post('http://localhost:5000/api/columns', {
         host,
@@ -93,19 +84,13 @@ function App() {
         database: selectedDatabase,
         table
       });
-      console.log('Columns fetched:', response.data);
       setColumns(response.data);
     } catch (err) {
-      if (err.response) {
-        setError(`API Error: ${err.response.data.error}`);
-        console.error('Error fetching columns:', err.response.data);
-      } else {
-        setError('Server is not responding. Please try again later.');
-      }
+      setError('Error fetching columns');
     }
   };
 
-  // Handle column selection for the main table
+  // Handle selection of columns
   const handleColumnChange = (e, column) => {
     const { checked } = e.target;
     if (checked) {
@@ -115,13 +100,12 @@ function App() {
     }
   };
 
-  // Fetch data based on the selected table, columns, and filters (no joins for now)
+  // Fetch data using the selected columns and advanced filters
   const fetchData = async () => {
     if (selectedColumns.length === 0) {
       setError('Please select at least one column');
       return;
     }
-
     try {
       const response = await axios.post('http://localhost:5000/api/query', {
         host,
@@ -130,22 +114,11 @@ function App() {
         database: selectedDatabase,
         table: selectedTable,
         columns: selectedColumns,
-        filters: {} // No filters for now; you can extend this later
+        filters: advancedFilters
       });
-      console.log('Data fetched:', response.data);
-      if (response.data && response.data.length > 0) {
-        setData(response.data);
-        setError('');
-      } else {
-        setError('No data found');
-      }
+      setData(response.data);
     } catch (err) {
-      if (err.response) {
-        setError(`API Error: ${err.response.data.error}`);
-        console.error('Error fetching data:', err.response.data);
-      } else {
-        setError('Server is not responding. Please try again later.');
-      }
+      setError('Error fetching data');
     }
   };
 
@@ -183,24 +156,33 @@ function App() {
               )}
               {selectedTable && columns.length > 0 && (
                 <div>
-                  <h2>Select Columns from Base Table ({selectedTable})</h2>
+                  <h2>Select Columns</h2>
                   {columns.map((column, index) => (
                     <div key={index}>
-                      <input type="checkbox" value={column} onChange={(e) => handleColumnChange(e, column)} />
+                      <input 
+                        type="checkbox" 
+                        value={column} 
+                        onChange={(e) => handleColumnChange(e, column)} 
+                      />
                       <label>{column}</label>
                     </div>
                   ))}
-                  <button onClick={fetchData}>Fetch Data</button>
                 </div>
               )}
             </div>
-            {/* Right section can be used for join settings if needed */}
             <div className="right-section">
-              <h2>Join Tables</h2>
-              <button onClick={() => { /* add join logic if needed */ }}>Add Join</button>
+              {selectedTable && columns.length > 0 && (
+                <>
+                  <h2>Advanced Filters</h2>
+                  <AdvancedFilters 
+                    availableColumns={columns} 
+                    onFiltersUpdate={(filters) => setAdvancedFilters(filters)} 
+                  />
+                  <button onClick={fetchData}>Fetch Data</button>
+                </>
+              )}
             </div>
           </div>
-          {/* Data will render in the data box at the bottom */}
           <div className="data-display">
             {data.length > 0 && (
               <table>
