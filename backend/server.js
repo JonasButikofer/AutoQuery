@@ -99,7 +99,7 @@ app.post('/api/columns', (req, res) => {
     });
 });
 
-// Endpoint to run a dynamic query with columns, filters, and joins
+// Endpoint to run a dynamic query with columns, filters, joins, groupBy, aggregates, and orderBy
 app.post('/api/query', (req, res) => {
   const { host, user, password, database, table, columns, filters, joins } = req.body;
   console.log('Query Request:', { host, user, database, table, columns, filters, joins });
@@ -110,7 +110,7 @@ app.post('/api/query', (req, res) => {
 
   const dbInstance = createKnexInstance({ host, user, password, database });
 
-  // Prepare the select columns. For any column not qualified (without a dot), prefix it with the base table.
+  // Prepare the select columns.
   let selectColumns = columns.map(col => {
     if (col.includes('.')) {
       const [tbl, colName] = col.split('.');
@@ -120,12 +120,14 @@ app.post('/api/query', (req, res) => {
   });
   console.log('Select Columns:', selectColumns);
 
-  // Build the base query from the base table
+  // Build the base query from the base table.
   let query = dbInstance(table).select(selectColumns);
 
-  // Apply dynamic filters
+  // --- Apply dynamic WHERE filters ---
   if (filters && typeof filters === 'object') {
-    Object.entries(filters).forEach(([column, value]) => {
+    // Use the nested "filters" property for actual column filters.
+    const whereFilters = filters.filters || {};
+    Object.entries(whereFilters).forEach(([column, value]) => {
       if (!value) return;
       if (Array.isArray(value)) {
         query.whereIn(column, value);
@@ -137,7 +139,7 @@ app.post('/api/query', (req, res) => {
     });
   }
 
-  // Apply dynamic joins
+  // --- Apply dynamic joins ---
   if (joins && Array.isArray(joins) && joins.length > 0) {
     joins.forEach(join => {
       if (!join.joinTable || !join.primaryKey || !join.foreignKey) {
@@ -151,9 +153,9 @@ app.post('/api/query', (req, res) => {
         LEFT: 'leftJoin',
         RIGHT: 'rightJoin'
       }[join.joinType] || 'leftJoin';
-      
+
       console.log(`Applying ${join.joinType || 'LEFT'} join: ${primaryTbl}.${join.primaryKey} = ${join.joinTable}.${join.foreignKey}`);
-      
+
       query = query[joinMethod](
         join.joinTable,
         `${primaryTbl}.${join.primaryKey}`,
@@ -161,8 +163,7 @@ app.post('/api/query', (req, res) => {
         `${join.joinTable}.${join.foreignKey}`
       );
 
-      // If join.joinColumns is provided and not empty, add them to the select clause;
-      // otherwise, add the foreignKey column as default.
+      // If join.joinColumns is provided, add them to the select clause.
       if (join.joinColumns && Array.isArray(join.joinColumns) && join.joinColumns.length > 0) {
         join.joinColumns.forEach(col => {
           const qualified = `${join.joinTable}.${col}`;
@@ -172,7 +173,7 @@ app.post('/api/query', (req, res) => {
           }
         });
       } else {
-        // Automatically add the foreignKey from the joined table if no join columns provided.
+        // Otherwise, add the foreign key column as default.
         const qualified = `${join.joinTable}.${join.foreignKey}`;
         const aliased = `${join.joinTable}_${join.foreignKey}`;
         if (!selectColumns.some(sc => sc.includes(`${join.joinTable}.${join.foreignKey}`))) {
@@ -180,10 +181,37 @@ app.post('/api/query', (req, res) => {
         }
       }
     });
+    // Reapply expanded selectColumns to the query.
+    query.select(selectColumns);
   }
 
-  // Reapply the expanded selectColumns array to the query.
-  query.select(selectColumns);
+  // --- Process Group By ---
+  if (filters && Array.isArray(filters.groupBy) && filters.groupBy.length > 0) {
+    query.groupBy(filters.groupBy);
+  }
+
+  // --- Process Aggregates ---
+  if (filters && Array.isArray(filters.aggregates) && filters.aggregates.length > 0) {
+    filters.aggregates.forEach(agg => {
+      if (agg.column && agg.func) {
+        const colQualified = agg.column.includes('.') ? agg.column : `${table}.${agg.column}`;
+        const alias = `${agg.func.toLowerCase()}_${agg.column.replace('.', '_')}`;
+        // Use knex.raw to add the aggregate expression.
+        selectColumns.push(dbInstance.raw(`${agg.func}(${colQualified}) as ${alias}`));
+      }
+    });
+    query.select(selectColumns);
+  }
+
+  // --- Process Order By ---
+  if (filters && Array.isArray(filters.orderBy) && filters.orderBy.length > 0) {
+    filters.orderBy.forEach(order => {
+      if (order.column && order.direction) {
+        query.orderBy(order.column, order.direction);
+      }
+    });
+  }
+
   const sqlQuery = query.toString();
   console.log('Generated SQL query:', sqlQuery);
 

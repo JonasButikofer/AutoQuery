@@ -20,7 +20,7 @@ function App() {
   const [selectedColumns, setSelectedColumns] = useState([]);
   const [data, setData] = useState([]);
 
-  // Advanced filters state
+  // Advanced filters state (the AdvancedFilters component will return a nested object)
   const [advancedFilters, setAdvancedFilters] = useState({});
 
   // Join-related states
@@ -95,7 +95,7 @@ function App() {
     }
   };
 
-  // Handle selection of columns
+  // Handle selection of columns from base table or join tables
   const handleColumnChange = (e, column) => {
     const { checked } = e.target;
     if (checked) {
@@ -112,6 +112,7 @@ function App() {
       {
         joinTable: '',
         joinColumns: [],
+        primaryTable: '', // allow user to choose from base table or any prior joined table
         primaryKey: '',
         foreignKey: '',
         joinType: 'INNER'
@@ -159,13 +160,14 @@ function App() {
     }
 
     try {
-      // Build the join objects to send along. Add primaryTable as selectedTable if not provided.
+      // Build the join objects to send along.
       const formattedJoins = joins.map(j => ({
         joinTable: j.joinTable,
         primaryTable: j.primaryTable ? j.primaryTable : selectedTable,
         primaryKey: j.primaryKey,
         foreignKey: j.foreignKey,
         joinType: j.joinType,
+        joinColumns: j.joinColumns,
       }));
 
       const payload = {
@@ -175,7 +177,7 @@ function App() {
         database: selectedDatabase,
         table: selectedTable,
         columns: selectedColumns,
-        filters: advancedFilters,
+        filters: advancedFilters, // nested filters object from AdvancedFilters component
         joins: formattedJoins,
       };
 
@@ -188,6 +190,7 @@ function App() {
       setData(response.data); // Set the response data for rendering
     } catch (err) {
       setError('Error fetching data');
+      console.error(err);
     }
   };
 
@@ -315,6 +318,21 @@ function App() {
                         ))}
                     </select>
 
+                    {/* Primary Table Dropdown for the Join */}
+                    <select
+                      value={join.primaryTable || selectedTable}
+                      onChange={(e) => updateJoin(index, 'primaryTable', e.target.value)}
+                    >
+                      <option value={selectedTable}>{selectedTable} (base)</option>
+                      {joins
+                        .filter((j, idx) => idx < index && j.joinTable)
+                        .map((j, idx) => (
+                          <option key={idx} value={j.joinTable}>
+                            {j.joinTable}
+                          </option>
+                        ))}
+                    </select>
+
                     {join.joinTable && (
                       <>
                         <select
@@ -324,7 +342,7 @@ function App() {
                           }
                         >
                           <option value="">
-                            Select Primary Key ({selectedTable})
+                            Select Primary Key ({join.primaryTable || selectedTable})
                           </option>
                           {columns.map((col, idx) => (
                             <option key={idx} value={col}>
