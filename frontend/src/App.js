@@ -99,9 +99,9 @@ function App() {
   const handleColumnChange = (e, column) => {
     const { checked } = e.target;
     if (checked) {
-      setSelectedColumns((prev) => [...prev, column]);
+      setSelectedColumns(prev => [...prev, column]);
     } else {
-      setSelectedColumns((prev) => prev.filter((col) => col !== column));
+      setSelectedColumns(prev => prev.filter(col => col !== column));
     }
   };
 
@@ -114,8 +114,8 @@ function App() {
         joinColumns: [],
         primaryKey: '',
         foreignKey: '',
-        joinType: 'INNER',
-      },
+        joinType: 'INNER'
+      }
     ]);
   };
 
@@ -125,11 +125,10 @@ function App() {
     setJoins(newJoins);
   };
 
-  // Handle join table selection
+  // Handle join table selection: fetch columns for that join table
   const handleJoinTableSelect = async (index, table) => {
     const newJoins = [...joins];
     newJoins[index].joinTable = table;
-
     try {
       const response = await axios.post('http://localhost:5000/api/columns', {
         host,
@@ -138,7 +137,6 @@ function App() {
         database: selectedDatabase,
         table,
       });
-
       newJoins[index].joinColumns = response.data;
       setJoins(newJoins);
     } catch (err) {
@@ -161,7 +159,16 @@ function App() {
     }
 
     try {
-      const response = await axios.post('http://localhost:5000/api/query', {
+      // Build the join objects to send along. Add primaryTable as selectedTable if not provided.
+      const formattedJoins = joins.map(j => ({
+        joinTable: j.joinTable,
+        primaryTable: j.primaryTable ? j.primaryTable : selectedTable,
+        primaryKey: j.primaryKey,
+        foreignKey: j.foreignKey,
+        joinType: j.joinType,
+      }));
+
+      const payload = {
         host,
         user,
         password,
@@ -169,14 +176,16 @@ function App() {
         table: selectedTable,
         columns: selectedColumns,
         filters: advancedFilters,
-        joins: joins.map((j) => ({
-          joinTable: j.joinTable,
-          primaryKey: j.primaryKey,
-          foreignKey: j.foreignKey,
-          joinType: j.joinType,
-        })),
-      });
-      setData(response.data);
+        joins: formattedJoins,
+      };
+
+      console.log('Query Payload:', payload);
+
+      const response = await axios.post('http://localhost:5000/api/query', payload);
+
+      console.log('API Response:', response.data);
+
+      setData(response.data); // Set the response data for rendering
     } catch (err) {
       setError('Error fetching data');
     }
@@ -257,14 +266,13 @@ function App() {
                     </div>
                   ))}
 
+                  {/* Display join table columns */}
                   {joins.map((join, joinIndex) =>
                     join.joinColumns.map((column, colIndex) => (
                       <div key={`join-${joinIndex}-${colIndex}`}>
                         <input
                           type="checkbox"
-                          checked={selectedColumns.includes(
-                            `${join.joinTable}.${column}`
-                          )}
+                          checked={selectedColumns.includes(`${join.joinTable}.${column}`)}
                           onChange={(e) =>
                             handleColumnChange(e, `${join.joinTable}.${column}`)
                           }
@@ -279,7 +287,8 @@ function App() {
               )}
             </div>
 
-            <div className="right-section">
+            {/* Right section now contains filters and joins and is scrollable */}
+            <div className="right-section" style={{ overflowY: 'auto', maxHeight: '80vh' }}>
               <h2>Advanced Filters</h2>
               <AdvancedFilters
                 availableColumns={columns}
@@ -314,7 +323,9 @@ function App() {
                             updateJoin(index, 'primaryKey', e.target.value)
                           }
                         >
-                          <option value="">Select Primary Key ({selectedTable})</option>
+                          <option value="">
+                            Select Primary Key ({selectedTable})
+                          </option>
                           {columns.map((col, idx) => (
                             <option key={idx} value={col}>
                               {col}
@@ -328,7 +339,9 @@ function App() {
                             updateJoin(index, 'foreignKey', e.target.value)
                           }
                         >
-                          <option value="">Select Foreign Key ({join.joinTable})</option>
+                          <option value="">
+                            Select Foreign Key ({join.joinTable})
+                          </option>
                           {join.joinColumns.map((col, idx) => (
                             <option key={idx} value={col}>
                               {col}
@@ -363,16 +376,16 @@ function App() {
               <table>
                 <thead>
                   <tr>
-                    {selectedColumns.map((col, index) => (
-                      <th key={index}>{col}</th>
+                    {Object.keys(data[0]).map((key, index) => (
+                      <th key={index}>{key}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {data.map((row, index) => (
                     <tr key={index}>
-                      {selectedColumns.map((col, colIndex) => (
-                        <td key={colIndex}>{row[col]}</td>
+                      {Object.keys(row).map((key, idx) => (
+                        <td key={idx}>{row[key]}</td>
                       ))}
                     </tr>
                   ))}

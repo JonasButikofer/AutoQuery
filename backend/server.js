@@ -2,14 +2,13 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const knex = require('knex');
-
 const app = express();
 const port = 5000;
 
 app.use(cors());
 app.use(bodyParser.json());
 
-// Helper function: Create a new Knex instance with given connection details
+// Create a Knex instance using dynamic connection details
 function createKnexInstance({ host, user, password, database = '' }) {
   return knex({
     client: 'mysql2',
@@ -18,23 +17,23 @@ function createKnexInstance({ host, user, password, database = '' }) {
   });
 }
 
-// Helper function for error handling with context
+// Error handler with debugging info
 function handleError(res, err, message, context) {
   console.error(`Context: ${context} - ${message}:`, err);
-  return res.status(500).json({
+  return res.status(500).json({ 
     error: message,
     details: err.message,
     context: context,
+    sql: err.sql || 'No SQL provided',
   });
 }
 
-// Endpoint to test connection (connect to a specific database)
+// Endpoint to test connection
 app.post('/api/connect', (req, res) => {
   const { host, user, password, database } = req.body;
+  console.log('Connect Request:', { host, user, database });
   const dbInstance = createKnexInstance({ host, user, password, database });
-
-  dbInstance
-    .raw('SELECT 1')
+  dbInstance.raw('SELECT 1')
     .then(() => {
       res.json({ message: 'Successfully connected to the database' });
       dbInstance.destroy();
@@ -48,13 +47,12 @@ app.post('/api/connect', (req, res) => {
 // Endpoint to fetch list of databases
 app.post('/api/databases', (req, res) => {
   const { host, user, password } = req.body;
+  console.log('Databases Request:', { host, user });
   const dbInstance = createKnexInstance({ host, user, password });
-
-  dbInstance
-    .raw('SHOW DATABASES')
+  dbInstance.raw('SHOW DATABASES')
     .then((results) => {
-      // results[0] is an array of objects like { Database: 'dbName' }
-      const databases = results[0].map((row) => row.Database);
+      const databases = results[0].map(row => row.Database);
+      console.log('Databases found:', databases);
       res.json({ databases });
       dbInstance.destroy();
     })
@@ -64,20 +62,16 @@ app.post('/api/databases', (req, res) => {
     });
 });
 
-// Endpoint to fetch tables of a selected database
+// Endpoint to fetch tables from a selected database
 app.post('/api/tables', (req, res) => {
   const { host, user, password, database } = req.body;
+  console.log('Tables Request:', { host, user, database });
   const dbInstance = createKnexInstance({ host, user, password, database });
-
-  dbInstance
-    .raw('SHOW TABLES')
+  dbInstance.raw('SHOW TABLES')
     .then((results) => {
-      if (!results || !results[0]) {
-        return res.status(404).json({ error: 'No tables found in the selected database.' });
-      }
-      // MySQL returns keys like "Tables_in_<database>"
       const key = `Tables_in_${database}`;
-      const tables = results[0].map((row) => row[key]);
+      const tables = results[0].map(row => row[key]);
+      console.log('Tables found:', tables);
       res.json(tables);
       dbInstance.destroy();
     })
@@ -87,19 +81,15 @@ app.post('/api/tables', (req, res) => {
     });
 });
 
-// Endpoint to fetch columns of a selected table
+// Endpoint to fetch columns from a selected table
 app.post('/api/columns', (req, res) => {
   const { host, user, password, database, table } = req.body;
+  console.log('Columns Request:', { host, user, database, table });
   const dbInstance = createKnexInstance({ host, user, password, database });
-
-  // Using parameterized query for safety
-  dbInstance
-    .raw('SHOW COLUMNS FROM ??', [table])
+  dbInstance.raw('SHOW COLUMNS FROM ??', [table])
     .then((results) => {
-      if (!results || !results[0]) {
-        return res.status(404).json({ error: `No columns found for the table '${table}'` });
-      }
-      const columns = results[0].map((row) => row.Field);
+      const columns = results[0].map(row => row.Field);
+      console.log(`Columns found in table ${table}:`, columns);
       res.json(columns);
       dbInstance.destroy();
     })
@@ -109,9 +99,10 @@ app.post('/api/columns', (req, res) => {
     });
 });
 
-// Endpoint to run a query with dynamic columns, filters, and joins
+// Endpoint to run a dynamic query with columns, filters, and joins
 app.post('/api/query', (req, res) => {
   const { host, user, password, database, table, columns, filters, joins } = req.body;
+  console.log('Query Request:', { host, user, database, table, columns, filters, joins });
 
   if (!columns || columns.length === 0) {
     return res.status(400).json({ error: 'Please select at least one column' });
@@ -119,64 +110,97 @@ app.post('/api/query', (req, res) => {
 
   const dbInstance = createKnexInstance({ host, user, password, database });
 
-  // Handle columns with table prefixes (e.g., "table.column")
-  const selectColumns = columns.map((col) => {
+  // Prepare the select columns. For any column not qualified (without a dot), prefix it with the base table.
+  let selectColumns = columns.map(col => {
     if (col.includes('.')) {
-      const [tableName, columnName] = col.split('.');
-      return `${tableName}.${columnName}`;
+      const [tbl, colName] = col.split('.');
+      return `${tbl}.${colName} as ${tbl}_${colName}`;
     }
-    return col;
+    return `${table}.${col} as ${table}_${col}`;
   });
+  console.log('Select Columns:', selectColumns);
 
+  // Build the base query from the base table
   let query = dbInstance(table).select(selectColumns);
 
-  // Apply filters
+  // Apply dynamic filters
   if (filters && typeof filters === 'object') {
-    Object.keys(filters).forEach((col) => {
-      const filter = filters[col];
-      if (filter) {
-        if (isNaN(filter)) {
-          query.where(col, 'LIKE', `%${filter}%`);
-        } else if (filter.includes(',')) {
-          const range = filter.split(',').map((val) => val.trim());
-          query.whereBetween(col, range);
-        } else {
-          query.where(col, '=', filter);
+    Object.entries(filters).forEach(([column, value]) => {
+      if (!value) return;
+      if (Array.isArray(value)) {
+        query.whereIn(column, value);
+      } else if (typeof value === 'string' && value.includes(',')) {
+        query.whereBetween(column, value.split(',').map(v => v.trim()));
+      } else {
+        query.where(column, 'like', `%${value}%`);
+      }
+    });
+  }
+
+  // Apply dynamic joins
+  if (joins && Array.isArray(joins) && joins.length > 0) {
+    joins.forEach(join => {
+      if (!join.joinTable || !join.primaryKey || !join.foreignKey) {
+        console.warn('Skipping invalid join:', join);
+        return;
+      }
+      // Use join.primaryTable if provided; otherwise, default to base table.
+      const primaryTbl = join.primaryTable || table;
+      const joinMethod = {
+        INNER: 'join',
+        LEFT: 'leftJoin',
+        RIGHT: 'rightJoin'
+      }[join.joinType] || 'leftJoin';
+      
+      console.log(`Applying ${join.joinType || 'LEFT'} join: ${primaryTbl}.${join.primaryKey} = ${join.joinTable}.${join.foreignKey}`);
+      
+      query = query[joinMethod](
+        join.joinTable,
+        `${primaryTbl}.${join.primaryKey}`,
+        '=',
+        `${join.joinTable}.${join.foreignKey}`
+      );
+
+      // If join.joinColumns is provided and not empty, add them to the select clause;
+      // otherwise, add the foreignKey column as default.
+      if (join.joinColumns && Array.isArray(join.joinColumns) && join.joinColumns.length > 0) {
+        join.joinColumns.forEach(col => {
+          const qualified = `${join.joinTable}.${col}`;
+          const aliased = `${join.joinTable}_${col}`;
+          if (!selectColumns.some(sc => sc.includes(`${join.joinTable}.${col}`))) {
+            selectColumns.push(`${qualified} as ${aliased}`);
+          }
+        });
+      } else {
+        // Automatically add the foreignKey from the joined table if no join columns provided.
+        const qualified = `${join.joinTable}.${join.foreignKey}`;
+        const aliased = `${join.joinTable}_${join.foreignKey}`;
+        if (!selectColumns.some(sc => sc.includes(`${join.joinTable}.${join.foreignKey}`))) {
+          selectColumns.push(`${qualified} as ${aliased}`);
         }
       }
     });
   }
 
-  // Apply joins
-  if (joins && joins.length > 0) {
-    joins.forEach((join) => {
-      const joinMethod = join.joinType === 'INNER' ? 'join' : join.joinType === 'LEFT' ? 'leftJoin' : join.joinType === 'RIGHT' ? 'rightJoin' : 'join';
+  // Reapply the expanded selectColumns array to the query.
+  query.select(selectColumns);
+  const sqlQuery = query.toString();
+  console.log('Generated SQL query:', sqlQuery);
 
-      query[joinMethod](
-        join.joinTable,
-        `${table}.${join.primaryKey}`,
-        '=',
-        `${join.joinTable}.${join.foreignKey}`
-      );
-    });
-  }
-
-  // Execute the query
   query
-    .then((results) => {
-      if (!results || results.length === 0) {
-        return res.status(404).json({ error: 'No results found for the query' });
-      }
+    .then(results => {
+      console.log('Query Results:', results);
+      if (!results.length) return res.status(404).json({ error: 'No results found' });
       res.json(results);
       dbInstance.destroy();
     })
-    .catch((err) => {
+    .catch(err => {
       dbInstance.destroy();
+      console.error('Query Error:', err);
       return handleError(res, err, 'Error executing query', 'POST /api/query');
     });
 });
 
-// Start the server
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
