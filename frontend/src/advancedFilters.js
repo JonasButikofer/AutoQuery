@@ -1,26 +1,92 @@
 import React, { useState } from 'react';
 
+// Define the operator options per data type.
+const operatorOptions = {
+  text: [
+    { value: '=', label: 'Equals' },
+    { value: 'contains', label: 'Contains' },
+    { value: 'startsWith', label: 'Starts With' },
+    { value: 'endsWith', label: 'Ends With' },
+    { value: '!=', label: 'Not Equal' },
+  ],
+  numeric: [
+    { value: '=', label: 'Equals' },
+    { value: '!=', label: 'Not Equal' },
+    { value: '<', label: 'Less Than' },
+    { value: '<=', label: 'Less Than or Equal' },
+    { value: '>', label: 'Greater Than' },
+    { value: '>=', label: 'Greater Than or Equal' },
+    { value: 'range', label: 'Range' },
+  ],
+  date: [
+    { value: '=', label: 'Equals' },
+    { value: '<', label: 'Before' },
+    { value: '>', label: 'After' },
+    { value: 'between', label: 'Between' },
+  ],
+};
+
 const AdvancedFilters = ({ availableColumns, onFiltersUpdate }) => {
-  // "Where" filters state (for WHERE clause conditions)
+  // State for WHERE filters, Group By, Aggregates, and Order By
   const [whereFilters, setWhereFilters] = useState([]);
-  // Group By state: an array of columns to group by
   const [groupBy, setGroupBy] = useState([]);
-  // Aggregates state: an array of objects, each with a function and column
   const [aggregates, setAggregates] = useState([]);
-  // Order By state: an array of objects, each with a column and direction
   const [orderBy, setOrderBy] = useState([]);
-  // State to toggle display of Group By section
   const [showGroupBy, setShowGroupBy] = useState(false);
 
-  // ----------------- WHERE Filters ----------------- //
+  // ----------------------- Helper Functions -----------------------
+  // These helpers let you work with either strings or objects.
+  const getColumnValue = (col) =>
+    typeof col === 'object' ? col.name : col;
+  const getColumnLabel = (col) =>
+    typeof col === 'object' ? col.label || col.name : col;
+
+  // Instead of converting the array to a simple object,
+  // we now output an array of filter objects so the backend
+  // can see both the operator and the value(s).
+  const buildWhereFiltersArray = (filtersArray) => {
+    return filtersArray
+      .filter((filter) => filter.column && filter.value1)
+      .map((filter) => {
+        if ((filter.operator === 'range' || filter.operator === 'between') && filter.value2) {
+          return {
+            column: filter.column,
+            operator: filter.operator,
+            value1: filter.value1,
+            value2: filter.value2,
+            dataType: filter.dataType,
+          };
+        } else {
+          return {
+            column: filter.column,
+            operator: filter.operator,
+            value: filter.value1,
+            dataType: filter.dataType,
+          };
+        }
+      });
+  };
+
+  // Notify the parent with the full advanced filters object.
+  const notifyParent = (wFilters, groupBy, aggregates, orderBy) => {
+    const filtersArray = buildWhereFiltersArray(wFilters);
+    onFiltersUpdate({
+      filters: filtersArray,
+      groupBy,
+      aggregates,
+      orderBy,
+    });
+  };
+
+  // ----------------------- WHERE Filters -----------------------
   const addWhereFilter = () => {
     const newFilter = {
       id: Date.now(),
       column: '',
       dataType: 'text',
-      operator: '=', // default for text, numeric and date
+      operator: '=', // default operator
       value1: '',
-      value2: ''
+      value2: '',
     };
     const updated = [...whereFilters, newFilter];
     setWhereFilters(updated);
@@ -28,7 +94,7 @@ const AdvancedFilters = ({ availableColumns, onFiltersUpdate }) => {
   };
 
   const updateWhereFilter = (id, field, value) => {
-    const updated = whereFilters.map(filter =>
+    const updated = whereFilters.map((filter) =>
       filter.id === id ? { ...filter, [field]: value } : filter
     );
     setWhereFilters(updated);
@@ -36,16 +102,16 @@ const AdvancedFilters = ({ availableColumns, onFiltersUpdate }) => {
   };
 
   const removeWhereFilter = (id) => {
-    const updated = whereFilters.filter(filter => filter.id !== id);
+    const updated = whereFilters.filter((filter) => filter.id !== id);
     setWhereFilters(updated);
     notifyParent(updated, groupBy, aggregates, orderBy);
   };
 
-  // ----------------- Group By ----------------- //
+  // ----------------------- Group By -----------------------
   const toggleGroupBy = (column) => {
     let updated;
     if (groupBy.includes(column)) {
-      updated = groupBy.filter(col => col !== column);
+      updated = groupBy.filter((col) => col !== column);
     } else {
       updated = [...groupBy, column];
     }
@@ -53,12 +119,12 @@ const AdvancedFilters = ({ availableColumns, onFiltersUpdate }) => {
     notifyParent(whereFilters, updated, aggregates, orderBy);
   };
 
-  // ----------------- Aggregates ----------------- //
+  // ----------------------- Aggregates -----------------------
   const addAggregate = () => {
     const newAgg = {
       id: Date.now(),
       column: '',
-      func: 'COUNT'
+      func: 'COUNT',
     };
     const updated = [...aggregates, newAgg];
     setAggregates(updated);
@@ -66,7 +132,7 @@ const AdvancedFilters = ({ availableColumns, onFiltersUpdate }) => {
   };
 
   const updateAggregate = (id, field, value) => {
-    const updated = aggregates.map(agg =>
+    const updated = aggregates.map((agg) =>
       agg.id === id ? { ...agg, [field]: value } : agg
     );
     setAggregates(updated);
@@ -74,17 +140,17 @@ const AdvancedFilters = ({ availableColumns, onFiltersUpdate }) => {
   };
 
   const removeAggregate = (id) => {
-    const updated = aggregates.filter(agg => agg.id !== id);
+    const updated = aggregates.filter((agg) => agg.id !== id);
     setAggregates(updated);
     notifyParent(whereFilters, groupBy, updated, orderBy);
   };
 
-  // ----------------- Order By ----------------- //
+  // ----------------------- Order By -----------------------
   const addOrderBy = () => {
     const newOrder = {
       id: Date.now(),
       column: '',
-      direction: 'ASC'
+      direction: 'ASC',
     };
     const updated = [...orderBy, newOrder];
     setOrderBy(updated);
@@ -92,7 +158,7 @@ const AdvancedFilters = ({ availableColumns, onFiltersUpdate }) => {
   };
 
   const updateOrderBy = (id, field, value) => {
-    const updated = orderBy.map(order =>
+    const updated = orderBy.map((order) =>
       order.id === id ? { ...order, [field]: value } : order
     );
     setOrderBy(updated);
@@ -100,56 +166,19 @@ const AdvancedFilters = ({ availableColumns, onFiltersUpdate }) => {
   };
 
   const removeOrderBy = (id) => {
-    const updated = orderBy.filter(order => order.id !== id);
+    const updated = orderBy.filter((order) => order.id !== id);
     setOrderBy(updated);
     notifyParent(whereFilters, groupBy, aggregates, updated);
   };
 
-  // ----------------- Notify Parent ----------------- //
-  // Build a "where" filters object that the backend can understand.
-  // For numeric ranges or date ranges, the value is a string "min,max".
-  const buildWhereFiltersObject = (filtersArray) => {
-    const filtersObject = {};
-    filtersArray.forEach(filter => {
-      if (filter.column) {
-        if (filter.dataType === 'numeric') {
-          if (filter.operator === 'range' && filter.value1 && filter.value2) {
-            filtersObject[filter.column] = `${filter.value1},${filter.value2}`;
-          } else if (filter.operator === '=' && filter.value1) {
-            filtersObject[filter.column] = filter.value1;
-          }
-        } else if (filter.dataType === 'text' && filter.value1) {
-          filtersObject[filter.column] = filter.value1;
-        } else if (filter.dataType === 'date') {
-          if (filter.operator === 'between' && filter.value1 && filter.value2) {
-            filtersObject[filter.column] = `${filter.value1},${filter.value2}`;
-          } else if (filter.operator === '=' && filter.value1) {
-            filtersObject[filter.column] = filter.value1;
-          }
-        }
-      }
-    });
-    return filtersObject;
-  };
-
-  // Notify parent with all advanced filter settings
-  const notifyParent = (whereFilters, groupBy, aggregates, orderBy) => {
-    const filtersObject = buildWhereFiltersObject(whereFilters);
-    onFiltersUpdate({
-      filters: filtersObject,
-      groupBy,
-      aggregates,
-      orderBy
-    });
-  };
-
+  // ----------------------- Render -----------------------
   return (
     <div className="advanced-filters">
       <h3>Advanced Filters</h3>
 
       {/* --------- WHERE Filters Section --------- */}
       <h4>Where Filters</h4>
-      {whereFilters.map(filter => (
+      {whereFilters.map((filter) => (
         <div key={filter.id} className="filter-row" style={{ marginBottom: '1rem' }}>
           {/* Column Selector */}
           <select
@@ -157,9 +186,15 @@ const AdvancedFilters = ({ availableColumns, onFiltersUpdate }) => {
             onChange={(e) => updateWhereFilter(filter.id, 'column', e.target.value)}
           >
             <option value="">Select Column</option>
-            {availableColumns.map((col, index) => (
-              <option key={index} value={col}>{col}</option>
-            ))}
+            {availableColumns.map((col, index) => {
+              const colVal = getColumnValue(col);
+              const colLabel = getColumnLabel(col);
+              return (
+                <option key={index} value={colVal}>
+                  {colLabel}
+                </option>
+              );
+            })}
           </select>
 
           {/* Data Type Selector */}
@@ -174,38 +209,20 @@ const AdvancedFilters = ({ availableColumns, onFiltersUpdate }) => {
           </select>
 
           {/* Operator Selector */}
-          {(filter.dataType === 'numeric' || filter.dataType === 'date') && (
-            <select
-              value={filter.operator}
-              onChange={(e) => updateWhereFilter(filter.id, 'operator', e.target.value)}
-              style={{ marginLeft: '0.5rem' }}
-            >
-              <option value="=">=</option>
-              {filter.dataType === 'numeric' && <option value="range">Range</option>}
-              {filter.dataType === 'date' && <option value="between">Between</option>}
-            </select>
-          )}
+          <select
+            value={filter.operator}
+            onChange={(e) => updateWhereFilter(filter.id, 'operator', e.target.value)}
+            style={{ marginLeft: '0.5rem' }}
+          >
+            {operatorOptions[filter.dataType].map((op) => (
+              <option key={op.value} value={op.value}>
+                {op.label}
+              </option>
+            ))}
+          </select>
 
-          {/* Input for single value */}
-          {(filter.dataType === 'text' ||
-            (filter.dataType === 'numeric' && filter.operator === '=') ||
-            (filter.dataType === 'date' && filter.operator === '=')) && (
-            <input
-              type={filter.dataType === 'date' ? 'date' : filter.dataType === 'numeric' ? 'number' : 'text'}
-              placeholder={
-                filter.dataType === 'numeric' ? 'Value' :
-                filter.dataType === 'date' ? 'Date' :
-                'Keyword'
-              }
-              value={filter.value1}
-              onChange={(e) => updateWhereFilter(filter.id, 'value1', e.target.value)}
-              style={{ marginLeft: '0.5rem' }}
-            />
-          )}
-
-          {/* Inputs for range values */}
-          {((filter.dataType === 'numeric' && filter.operator === 'range') ||
-            (filter.dataType === 'date' && filter.operator === 'between')) && (
+          {/* Input(s) for Value(s) */}
+          {(filter.operator === 'range' || filter.operator === 'between') ? (
             <>
               <input
                 type={filter.dataType === 'date' ? 'date' : 'number'}
@@ -222,6 +239,20 @@ const AdvancedFilters = ({ availableColumns, onFiltersUpdate }) => {
                 style={{ marginLeft: '0.5rem' }}
               />
             </>
+          ) : (
+            <input
+              type={
+                filter.dataType === 'date'
+                  ? 'date'
+                  : filter.dataType === 'numeric'
+                  ? 'number'
+                  : 'text'
+              }
+              placeholder="Value"
+              value={filter.value1}
+              onChange={(e) => updateWhereFilter(filter.id, 'value1', e.target.value)}
+              style={{ marginLeft: '0.5rem' }}
+            />
           )}
 
           <button onClick={() => removeWhereFilter(filter.id)} style={{ marginLeft: '0.5rem' }}>
@@ -231,35 +262,37 @@ const AdvancedFilters = ({ availableColumns, onFiltersUpdate }) => {
       ))}
       <button onClick={addWhereFilter}>Add Where Filter</button>
 
-      {/* --------- Group By Toggle Button --------- */}
+      {/* --------- Group By Section --------- */}
       <div style={{ marginTop: '1rem' }}>
         <button onClick={() => setShowGroupBy(!showGroupBy)}>
           {showGroupBy ? 'Hide Group By' : 'Group By'}
         </button>
       </div>
-
-      {/* --------- Group By Section (conditionally rendered) --------- */}
       {showGroupBy && (
         <div>
           <h4 style={{ marginTop: '1rem' }}>Group By</h4>
-          {availableColumns.map((col, index) => (
-            <div key={`groupby-${index}`}>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={groupBy.includes(col)}
-                  onChange={() => toggleGroupBy(col)}
-                />
-                {col}
-              </label>
-            </div>
-          ))}
+          {availableColumns.map((col, index) => {
+            const colVal = getColumnValue(col);
+            const colLabel = getColumnLabel(col);
+            return (
+              <div key={`groupby-${index}`}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={groupBy.includes(colVal)}
+                    onChange={() => toggleGroupBy(colVal)}
+                  />
+                  {colLabel}
+                </label>
+              </div>
+            );
+          })}
         </div>
       )}
 
       {/* --------- Aggregates Section --------- */}
       <h4 style={{ marginTop: '1rem' }}>Aggregates</h4>
-      {aggregates.map(agg => (
+      {aggregates.map((agg) => (
         <div key={agg.id} style={{ marginBottom: '1rem' }}>
           <select
             value={agg.func}
@@ -277,9 +310,15 @@ const AdvancedFilters = ({ availableColumns, onFiltersUpdate }) => {
             style={{ marginLeft: '0.5rem' }}
           >
             <option value="">Select Column</option>
-            {availableColumns.map((col, index) => (
-              <option key={index} value={col}>{col}</option>
-            ))}
+            {availableColumns.map((col, index) => {
+              const colVal = getColumnValue(col);
+              const colLabel = getColumnLabel(col);
+              return (
+                <option key={index} value={colVal}>
+                  {colLabel}
+                </option>
+              );
+            })}
           </select>
           <button onClick={() => removeAggregate(agg.id)} style={{ marginLeft: '0.5rem' }}>
             Remove
@@ -290,16 +329,22 @@ const AdvancedFilters = ({ availableColumns, onFiltersUpdate }) => {
 
       {/* --------- Order By Section --------- */}
       <h4 style={{ marginTop: '1rem' }}>Order By</h4>
-      {orderBy.map(order => (
+      {orderBy.map((order) => (
         <div key={order.id} style={{ marginBottom: '1rem' }}>
           <select
             value={order.column}
             onChange={(e) => updateOrderBy(order.id, 'column', e.target.value)}
           >
             <option value="">Select Column</option>
-            {availableColumns.map((col, index) => (
-              <option key={index} value={col}>{col}</option>
-            ))}
+            {availableColumns.map((col, index) => {
+              const colVal = getColumnValue(col);
+              const colLabel = getColumnLabel(col);
+              return (
+                <option key={index} value={colVal}>
+                  {colLabel}
+                </option>
+              );
+            })}
           </select>
           <select
             value={order.direction}

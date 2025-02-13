@@ -99,9 +99,9 @@ function App() {
   const handleColumnChange = (e, column) => {
     const { checked } = e.target;
     if (checked) {
-      setSelectedColumns(prev => [...prev, column]);
+      setSelectedColumns((prev) => [...prev, column]);
     } else {
-      setSelectedColumns(prev => prev.filter(col => col !== column));
+      setSelectedColumns((prev) => prev.filter((col) => col !== column));
     }
   };
 
@@ -115,8 +115,8 @@ function App() {
         primaryTable: '', // user can choose from base table or any prior joined table
         primaryKey: '',
         foreignKey: '',
-        joinType: 'INNER'
-      }
+        joinType: 'INNER',
+      },
     ]);
   };
 
@@ -152,6 +152,24 @@ function App() {
     setJoins(newJoins);
   };
 
+  // Compute combined columns from the base table and any joined tables.
+  // Each column is represented as an object with name (fully qualified) and label.
+  const combinedColumns =
+    selectedTable && columns.length > 0
+      ? [
+          ...columns.map((col) => ({
+            name: `${selectedTable}.${col}`,
+            label: `${selectedTable}.${col}`,
+          })),
+          ...joins.flatMap((join) =>
+            join.joinColumns.map((col) => ({
+              name: `${join.joinTable}.${col}`,
+              label: `${join.joinTable}.${col}`,
+            }))
+          ),
+        ]
+      : [];
+
   // Fetch data using the selected columns, advanced filters, and joins
   const fetchData = async () => {
     if (selectedColumns.length === 0) {
@@ -161,7 +179,7 @@ function App() {
 
     try {
       // Build the join objects to send along.
-      const formattedJoins = joins.map(j => ({
+      const formattedJoins = joins.map((j) => ({
         joinTable: j.joinTable,
         primaryTable: j.primaryTable ? j.primaryTable : selectedTable,
         primaryKey: j.primaryKey,
@@ -177,7 +195,7 @@ function App() {
         database: selectedDatabase,
         table: selectedTable,
         columns: selectedColumns,
-        filters: advancedFilters, // nested filters object
+        filters: advancedFilters, // nested filters object from AdvancedFilters
         joins: formattedJoins,
       };
 
@@ -195,8 +213,8 @@ function App() {
   };
 
   // Compute the aliases for selected columns.
-  // For a column "chapters.chapter_number", the alias is "chapters_chapter_number".
-  const selectedAliases = selectedColumns.map(col => {
+  // For a column "orders.total", the alias is "orders_total".
+  const selectedAliases = selectedColumns.map((col) => {
     if (col.includes('.')) {
       const [tbl, colName] = col.split('.');
       return `${tbl}_${colName}`;
@@ -234,74 +252,75 @@ function App() {
       ) : (
         <div className="main-content">
           <div className="selection-container">
-          <div className="left-section">
-  <h2>Select Database</h2>
-  <select onChange={(e) => fetchTables(e.target.value)} value={selectedDatabase}>
-    <option value="">Select a Database</option>
-    {databases.map((db, index) => (
-      <option key={index} value={db}>
-        {db}
-      </option>
-    ))}
-  </select>
+            <div className="left-section">
+              <h2>Select Database</h2>
+              <select onChange={(e) => fetchTables(e.target.value)} value={selectedDatabase}>
+                <option value="">Select a Database</option>
+                {databases.map((db, index) => (
+                  <option key={index} value={db}>
+                    {db}
+                  </option>
+                ))}
+              </select>
 
-  {selectedDatabase && (
-    <div>
-      <h2>Select Table</h2>
-      <select onChange={(e) => fetchColumns(e.target.value)} value={selectedTable}>
-        <option value="">Select a Table</option>
-        {tables.map((table, index) => (
-          <option key={index} value={table}>
-            {table}
-          </option>
-        ))}
-      </select>
-    </div>
-  )}
+              {selectedDatabase && (
+                <div>
+                  <h2>Select Table</h2>
+                  <select onChange={(e) => fetchColumns(e.target.value)} value={selectedTable}>
+                    <option value="">Select a Table</option>
+                    {tables.map((table, index) => (
+                      <option key={index} value={table}>
+                        {table}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
-  {selectedTable && columns.length > 0 && (
-    <div>
-      <h2>Select Columns</h2>
-      {columns.map((column, index) => (
-        <div key={index}>
-          <input
-            type="checkbox"
-            checked={selectedColumns.includes(column)}
-            onChange={(e) => handleColumnChange(e, column)}
-          />
-          <label>{column}</label>
-        </div>
-      ))}
+              {selectedTable && columns.length > 0 && (
+                <div>
+                  <h2>Select Columns</h2>
+                  {columns.map((column, index) => (
+                    <div key={index}>
+                      <input
+                        type="checkbox"
+                        checked={selectedColumns.includes(`${selectedTable}.${column}`)}
+                        onChange={(e) => handleColumnChange(e, `${selectedTable}.${column}`)}
+                      />
+                      <label>{`${selectedTable}.${column}`}</label>
+                    </div>
+                  ))}
 
-      {/* Display join table columns */}
-      {joins.map((join, joinIndex) =>
-        join.joinColumns.map((column, colIndex) => (
-          <div key={`join-${joinIndex}-${colIndex}`}>
-            <input
-              type="checkbox"
-              checked={selectedColumns.includes(`${join.joinTable}.${column}`)}
-              onChange={(e) => handleColumnChange(e, `${join.joinTable}.${column}`)}
-            />
-            <label>{join.joinTable}.{column}</label>
-          </div>
-        ))
-      )}
-    </div>
-  )}
+                  {/* Display join table columns */}
+                  {joins.map((join, joinIndex) =>
+                    join.joinColumns.map((column, colIndex) => (
+                      <div key={`join-${joinIndex}-${colIndex}`}>
+                        <input
+                          type="checkbox"
+                          checked={selectedColumns.includes(`${join.joinTable}.${column}`)}
+                          onChange={(e) =>
+                            handleColumnChange(e, `${join.joinTable}.${column}`)
+                          }
+                        />
+                        <label>{`${join.joinTable}.${column}`}</label>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
 
-  {/* Move Fetch Data button here */}
-  {selectedColumns.length > 0 && (
-    <button className="fetch-button" onClick={fetchData}>
-      Fetch Data
-    </button>
-  )}
-</div>
+              {selectedColumns.length > 0 && (
+                <button className="fetch-button" onClick={fetchData}>
+                  Fetch Data
+                </button>
+              )}
+            </div>
 
-            {/* Right section now contains filters and joins and is scrollable */}
+            {/* Right section now contains filters and joins */}
             <div className="right-section" style={{ overflowY: 'auto', maxHeight: '80vh' }}>
               <h2>Advanced Filters</h2>
               <AdvancedFilters
-                availableColumns={columns}
+                availableColumns={combinedColumns}
                 onFiltersUpdate={(filters) => setAdvancedFilters(filters)}
               />
 
@@ -344,9 +363,7 @@ function App() {
                       <>
                         <select
                           value={join.primaryKey}
-                          onChange={(e) =>
-                            updateJoin(index, 'primaryKey', e.target.value)
-                          }
+                          onChange={(e) => updateJoin(index, 'primaryKey', e.target.value)}
                         >
                           <option value="">
                             Select Primary Key ({join.primaryTable || selectedTable})
@@ -360,9 +377,7 @@ function App() {
 
                         <select
                           value={join.foreignKey}
-                          onChange={(e) =>
-                            updateJoin(index, 'foreignKey', e.target.value)
-                          }
+                          onChange={(e) => updateJoin(index, 'foreignKey', e.target.value)}
                         >
                           <option value="">
                             Select Foreign Key ({join.joinTable})
@@ -376,9 +391,7 @@ function App() {
 
                         <select
                           value={join.joinType}
-                          onChange={(e) =>
-                            updateJoin(index, 'joinType', e.target.value)
-                          }
+                          onChange={(e) => updateJoin(index, 'joinType', e.target.value)}
                         >
                           <option value="INNER">INNER JOIN</option>
                           <option value="LEFT">LEFT JOIN</option>
@@ -391,8 +404,6 @@ function App() {
                   </div>
                 ))}
               </div>
-
-              {/* <button onClick={fetchData}>Fetch Data</button> */}
             </div>
           </div>
 
