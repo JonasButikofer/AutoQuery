@@ -20,7 +20,7 @@ function App() {
   const [selectedColumns, setSelectedColumns] = useState([]);
   const [data, setData] = useState([]);
 
-  // Advanced filters state (the AdvancedFilters component will return a nested object)
+  // Advanced filters state (the AdvancedFilters component returns a nested object)
   const [advancedFilters, setAdvancedFilters] = useState({});
 
   // Join-related states
@@ -95,7 +95,7 @@ function App() {
     }
   };
 
-  // Handle selection of columns from base table or join tables
+  // Handle selection of columns from base table (or joined tables if they are explicitly checked)
   const handleColumnChange = (e, column) => {
     const { checked } = e.target;
     if (checked) {
@@ -112,7 +112,7 @@ function App() {
       {
         joinTable: '',
         joinColumns: [],
-        primaryTable: '', // allow user to choose from base table or any prior joined table
+        primaryTable: '', // user can choose from base table or any prior joined table
         primaryKey: '',
         foreignKey: '',
         joinType: 'INNER'
@@ -177,7 +177,7 @@ function App() {
         database: selectedDatabase,
         table: selectedTable,
         columns: selectedColumns,
-        filters: advancedFilters, // nested filters object from AdvancedFilters component
+        filters: advancedFilters, // nested filters object
         joins: formattedJoins,
       };
 
@@ -193,6 +193,16 @@ function App() {
       console.error(err);
     }
   };
+
+  // Compute the aliases for selected columns.
+  // For a column "chapters.chapter_number", the alias is "chapters_chapter_number".
+  const selectedAliases = selectedColumns.map(col => {
+    if (col.includes('.')) {
+      const [tbl, colName] = col.split('.');
+      return `${tbl}_${colName}`;
+    }
+    return `${selectedTable}_${col}`;
+  });
 
   return (
     <div className="App">
@@ -390,20 +400,20 @@ function App() {
           </div>
 
           <div className="data-display">
-            {data.length > 0 && (
+            {data.length > 0 && selectedColumns.length > 0 && (
               <table>
                 <thead>
                   <tr>
-                    {Object.keys(data[0]).map((key, index) => (
-                      <th key={index}>{key}</th>
+                    {selectedAliases.map((alias, index) => (
+                      <th key={index}>{alias}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {data.map((row, index) => (
                     <tr key={index}>
-                      {Object.keys(row).map((key, idx) => (
-                        <td key={idx}>{row[key]}</td>
+                      {selectedAliases.map((alias, idx) => (
+                        <td key={idx}>{row[alias]}</td>
                       ))}
                     </tr>
                   ))}
