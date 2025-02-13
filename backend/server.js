@@ -14,7 +14,7 @@ function createKnexInstance({ host, user, password, database = '' }) {
   return knex({
     client: 'mysql2',
     connection: { host, user, password, database },
-    pool: { min: 0, max: 10 }
+    pool: { min: 0, max: 10 },
   });
 }
 
@@ -24,7 +24,7 @@ function handleError(res, err, message, context) {
   return res.status(500).json({
     error: message,
     details: err.message,
-    context: context
+    context: context,
   });
 }
 
@@ -32,8 +32,9 @@ function handleError(res, err, message, context) {
 app.post('/api/connect', (req, res) => {
   const { host, user, password, database } = req.body;
   const dbInstance = createKnexInstance({ host, user, password, database });
-  
-  dbInstance.raw('SELECT 1')
+
+  dbInstance
+    .raw('SELECT 1')
     .then(() => {
       res.json({ message: 'Successfully connected to the database' });
       dbInstance.destroy();
@@ -48,11 +49,12 @@ app.post('/api/connect', (req, res) => {
 app.post('/api/databases', (req, res) => {
   const { host, user, password } = req.body;
   const dbInstance = createKnexInstance({ host, user, password });
-  
-  dbInstance.raw('SHOW DATABASES')
+
+  dbInstance
+    .raw('SHOW DATABASES')
     .then((results) => {
       // results[0] is an array of objects like { Database: 'dbName' }
-      const databases = results[0].map(row => row.Database);
+      const databases = results[0].map((row) => row.Database);
       res.json({ databases });
       dbInstance.destroy();
     })
@@ -66,15 +68,16 @@ app.post('/api/databases', (req, res) => {
 app.post('/api/tables', (req, res) => {
   const { host, user, password, database } = req.body;
   const dbInstance = createKnexInstance({ host, user, password, database });
-  
-  dbInstance.raw('SHOW TABLES')
+
+  dbInstance
+    .raw('SHOW TABLES')
     .then((results) => {
       if (!results || !results[0]) {
         return res.status(404).json({ error: 'No tables found in the selected database.' });
       }
       // MySQL returns keys like "Tables_in_<database>"
       const key = `Tables_in_${database}`;
-      const tables = results[0].map(row => row[key]);
+      const tables = results[0].map((row) => row[key]);
       res.json(tables);
       dbInstance.destroy();
     })
@@ -88,14 +91,15 @@ app.post('/api/tables', (req, res) => {
 app.post('/api/columns', (req, res) => {
   const { host, user, password, database, table } = req.body;
   const dbInstance = createKnexInstance({ host, user, password, database });
-  
+
   // Using parameterized query for safety
-  dbInstance.raw('SHOW COLUMNS FROM ??', [table])
+  dbInstance
+    .raw('SHOW COLUMNS FROM ??', [table])
     .then((results) => {
       if (!results || !results[0]) {
         return res.status(404).json({ error: `No columns found for the table '${table}'` });
       }
-      const columns = results[0].map(row => row.Field);
+      const columns = results[0].map((row) => row.Field);
       res.json(columns);
       dbInstance.destroy();
     })
@@ -105,9 +109,9 @@ app.post('/api/columns', (req, res) => {
     });
 });
 
-// Endpoint to run a query with dynamic columns and filters (no joins)
+// Endpoint to run a query with dynamic columns, filters, and joins
 app.post('/api/query', (req, res) => {
-  const { host, user, password, database, table, columns, filters } = req.body;
+  const { host, user, password, database, table, columns, filters, joins } = req.body;
 
   if (!columns || columns.length === 0) {
     return res.status(400).json({ error: 'Please select at least one column' });
@@ -115,17 +119,26 @@ app.post('/api/query', (req, res) => {
 
   const dbInstance = createKnexInstance({ host, user, password, database });
 
-  let query = dbInstance(table).select(columns);
+  // Handle columns with table prefixes (e.g., "table.column")
+  const selectColumns = columns.map((col) => {
+    if (col.includes('.')) {
+      const [tableName, columnName] = col.split('.');
+      return `${tableName}.${columnName}`;
+    }
+    return col;
+  });
 
-  // Apply filters dynamically
+  let query = dbInstance(table).select(selectColumns);
+
+  // Apply filters
   if (filters && typeof filters === 'object') {
-    Object.keys(filters).forEach(col => {
+    Object.keys(filters).forEach((col) => {
       const filter = filters[col];
       if (filter) {
         if (isNaN(filter)) {
           query.where(col, 'LIKE', `%${filter}%`);
         } else if (filter.includes(',')) {
-          const range = filter.split(',').map(val => val.trim());
+          const range = filter.split(',').map((val) => val.trim());
           query.whereBetween(col, range);
         } else {
           query.where(col, '=', filter);
@@ -134,7 +147,23 @@ app.post('/api/query', (req, res) => {
     });
   }
 
-  query.then((results) => {
+  // Apply joins
+  if (joins && joins.length > 0) {
+    joins.forEach((join) => {
+      const joinMethod = join.joinType === 'INNER' ? 'join' : join.joinType === 'LEFT' ? 'leftJoin' : join.joinType === 'RIGHT' ? 'rightJoin' : 'join';
+
+      query[joinMethod](
+        join.joinTable,
+        `${table}.${join.primaryKey}`,
+        '=',
+        `${join.joinTable}.${join.foreignKey}`
+      );
+    });
+  }
+
+  // Execute the query
+  query
+    .then((results) => {
       if (!results || results.length === 0) {
         return res.status(404).json({ error: 'No results found for the query' });
       }

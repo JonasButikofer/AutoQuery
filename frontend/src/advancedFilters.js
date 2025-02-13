@@ -12,9 +12,9 @@ const AdvancedFilters = ({ availableColumns, onFiltersUpdate }) => {
         id: Date.now(), // simple unique id
         column: '',
         dataType: 'text',
-        operator: '=', // default operator for numeric filters
-        value1: '',    // for text or numeric "="
-        value2: ''     // only used for numeric range
+        operator: '=', // default operator for numeric and date filters
+        value1: '',    // for text, numeric or date "="
+        value2: ''     // only used for numeric range or date range
       }
     ]);
   };
@@ -39,7 +39,7 @@ const AdvancedFilters = ({ availableColumns, onFiltersUpdate }) => {
   };
 
   // Construct a filters object for the backend.
-  // For numeric ranges, the value is a string "min,max".
+  // For numeric ranges or date ranges, the value is a string "min,max".
   const notifyParent = (filtersArray) => {
     const filtersObject = {};
     filtersArray.forEach(filter => {
@@ -52,6 +52,12 @@ const AdvancedFilters = ({ availableColumns, onFiltersUpdate }) => {
           }
         } else if (filter.dataType === 'text' && filter.value1) {
           filtersObject[filter.column] = filter.value1;
+        } else if (filter.dataType === 'date') {
+          if (filter.operator === 'between' && filter.value1 && filter.value2) {
+            filtersObject[filter.column] = `${filter.value1},${filter.value2}`;
+          } else if (filter.operator === '=' && filter.value1) {
+            filtersObject[filter.column] = filter.value1;
+          }
         }
       }
     });
@@ -84,45 +90,49 @@ const AdvancedFilters = ({ availableColumns, onFiltersUpdate }) => {
           >
             <option value="text">Text</option>
             <option value="numeric">Numeric</option>
+            <option value="date">Date</option>
           </select>
 
-          {/* Numeric Operator Selector */}
-          {filter.dataType === 'numeric' && (
+          {/* Operator Selector */}
+          {(filter.dataType === 'numeric' || filter.dataType === 'date') && (
             <select
               value={filter.operator}
               onChange={(e) => updateFilter(filter.id, 'operator', e.target.value)}
               style={{ marginLeft: '0.5rem' }}
             >
               <option value="=">=</option>
-              <option value="range">Range</option>
+              {filter.dataType === 'numeric' && <option value="range">Range</option>}
+              {filter.dataType === 'date' && <option value="between">Between</option>}
             </select>
           )}
 
-          {/* Input for text or numeric "=" operator */}
-          {((filter.dataType === 'text') ||
-            (filter.dataType === 'numeric' && filter.operator === '=')) && (
+          {/* Input for text, numeric "=", or date "=" operator */}
+          {(filter.dataType === 'text' ||
+            (filter.dataType === 'numeric' && filter.operator === '=') ||
+            (filter.dataType === 'date' && filter.operator === '=')) && (
             <input
-              type={filter.dataType === 'numeric' ? 'number' : 'text'}
-              placeholder={filter.dataType === 'numeric' ? 'Value' : 'Keyword'}
+              type={filter.dataType === 'date' ? 'date' : filter.dataType === 'numeric' ? 'number' : 'text'}
+              placeholder={filter.dataType === 'numeric' ? 'Value' : filter.dataType === 'date' ? 'Date' : 'Keyword'}
               value={filter.value1}
               onChange={(e) => updateFilter(filter.id, 'value1', e.target.value)}
               style={{ marginLeft: '0.5rem' }}
             />
           )}
 
-          {/* Inputs for numeric range */}
-          {filter.dataType === 'numeric' && filter.operator === 'range' && (
+          {/* Inputs for numeric or date range */}
+          {(filter.dataType === 'numeric' && filter.operator === 'range') ||
+           (filter.dataType === 'date' && filter.operator === 'between') && (
             <>
               <input
-                type="number"
-                placeholder="Min"
+                type={filter.dataType === 'date' ? 'date' : 'number'}
+                placeholder={filter.dataType === 'date' ? 'Start Date' : 'Min'}
                 value={filter.value1}
                 onChange={(e) => updateFilter(filter.id, 'value1', e.target.value)}
                 style={{ marginLeft: '0.5rem' }}
               />
               <input
-                type="number"
-                placeholder="Max"
+                type={filter.dataType === 'date' ? 'date' : 'number'}
+                placeholder={filter.dataType === 'date' ? 'End Date' : 'Max'}
                 value={filter.value2}
                 onChange={(e) => updateFilter(filter.id, 'value2', e.target.value)}
                 style={{ marginLeft: '0.5rem' }}
