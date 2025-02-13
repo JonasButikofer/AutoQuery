@@ -1,0 +1,84 @@
+/* General styles */
+.App {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+}
+
+h1 {
+    text-align: center;
+}
+
+input, select, button {
+    padding: 8px;
+    margin: 10px 0;
+    font-size: 16px;
+}
+
+button {
+    cursor: pointer;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+.error-message {
+    color: red;
+    font-weight: bold;
+    text-align: center;
+}
+
+/* Main content arranged vertically */
+.main-content {
+    display: flex;
+    flex-direction: column;
+    margin-top: 20px;
+}
+
+/* Container for selections (left and right sections) */
+.selection-container {
+    display: flex;
+    justify-content: space-between;
+}
+
+/* Left section with database and table selections */
+.left-section {
+    width: 60%;
+}
+
+/* Right section (for join settings, if used) */
+.right-section {
+    width: 35%;
+    padding-left: 20px;
+    border-left: 2px solid #ddd;
+}
+
+/* Data display area at the bottom */
+.data-display {
+    margin-top: 30px;
+    border: 2px solid #ddd;
+    padding: 10px;
+    overflow: auto;
+    resize: vertical;
+    height: 200px;
+}
+
+/* Table styling */
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 8px;
+    border: 1px solid #ddd;
+    text-align: center;
+}
+
+th {
+    background-color: #f2f2f2;
+}
